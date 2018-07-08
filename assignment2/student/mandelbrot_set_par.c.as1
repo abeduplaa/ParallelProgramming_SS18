@@ -1,0 +1,142 @@
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <complex.h>
+#include <pthread.h>
+
+#include "mandelbrot_set.h"
+
+
+struct pthread_args
+{
+	int max_iter;
+	int palette_shift;
+	int i_max;
+	int j_max;
+	int i_min;
+	int j_min;
+	double y_stepsize;
+	double view_y1;
+	double view_x0;
+	double x_stepsize;
+	void *imag;
+	//void (* imag);
+};
+
+
+void* kernel(void * args){
+	//initialize:
+	struct pthread_args *arg = (struct pthread_args*) args;
+	
+	unsigned char (*img)[arg->j_max][3] = arg->imag;
+	
+	//arg->imag = malloc(arg->j_max*arg->i_max*sizeof(char[3]));
+	double y;
+	double x;
+
+	complex double Z;
+	complex double C;
+
+	int k;
+	
+
+	for (int i = arg->i_min; i < arg->i_max; i++)
+	{
+		for (int j = arg->j_min; j <  arg-> j_max; j++)
+		{
+			y = arg->view_y1 - i * arg->y_stepsize;
+			x = arg->view_x0 + j * arg->x_stepsize;
+
+			Z = 0 + 0 * I;
+			C = x + y * I;
+
+			k = 0;
+
+			do
+			{
+				Z = Z * Z + C;
+				k++;
+			} while (cabs(Z) < 2 && k <  arg->max_iter);
+
+			if (k == arg->max_iter)
+			{
+				//memcpy(arg->imag[i][j], "\0\0\0", 3);
+				memcpy(img[i][j], "\0\0\0", 3);
+			}
+			else
+			{
+				int index = (k + arg->palette_shift)
+				            % (sizeof(colors) / sizeof(colors[0]));
+				//memcpy(arg->imag[i][j], colors[index], 3);
+				memcpy(img[i][j], colors[index], 3);
+			}
+		}
+	}
+	//free(img);
+	return NULL;
+}
+
+
+void mandelbrot_draw(int x_resolution, int y_resolution, int max_iter,
+	                double view_x0, double view_x1, double view_y0, double view_y1,
+	                double x_stepsize, double y_stepsize,
+	                int palette_shift, unsigned char (*image)[x_resolution][3],
+						 int num_threads) {
+	//Initialize:
+
+	//Create array of threads:
+	pthread_t *threads = (pthread_t*) malloc (num_threads*sizeof(pthread_t));
+	
+	//Create struct to pass to threads:
+	struct pthread_args* args = (struct pthread_args*) calloc(num_threads,sizeof(struct pthread_args));	
+	
+	int yblocksize;
+	int leftover;
+	
+	//determine number of large loops of image each thread gets:
+	yblocksize = y_resolution / num_threads;
+	
+	//leftover for last one
+	leftover = y_resolution % num_threads;	
+	//xblocks = x_resolution / num_threads;
+	
+
+	for(int i = 0 ; i<num_threads; i++){
+
+		args[i].max_iter = max_iter;
+		args[i].palette_shift = palette_shift;
+		args[i].j_min = 0;
+		args[i].j_max = x_resolution;
+		args[i].i_min = yblocksize * i;
+		args[i].x_stepsize = x_stepsize;
+		args[i].y_stepsize = y_stepsize;
+		args[i].view_x0 = view_x0;
+		args[i].view_y1 = view_y1;
+		args[i].imag = image;
+
+		if(i==num_threads-1){
+			args[i].i_max = yblocksize * (i+1) + leftover;
+		}else{
+
+			args[i].i_max = yblocksize * (i+1); 
+		}
+
+		
+		pthread_create(&threads[i],NULL,kernel, args+i);
+
+
+	}
+
+		
+
+
+
+	for (int i = 0 ; i < num_threads; i++){
+		pthread_join(threads[i], NULL);
+	}
+
+	free(threads);
+	free(args);
+
+}

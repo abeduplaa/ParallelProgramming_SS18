@@ -1,0 +1,106 @@
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <complex.h>
+#include <pthread.h>
+
+#include "mandelbrot_set.h"
+
+struct pthread_args
+{
+	complex double Z;
+	complex double C;
+	int max_iter;
+	int palette_shift;
+	int x_resolution;
+	unsigned char* img;
+	//double x;
+	//double y;
+	int i;
+};
+
+void* kernel(void * args){
+	
+	struct pthread_args *arg = (struct pthread_args*) args;
+
+	for (int j = 0; j < arg->x_resolution; j++)
+	{
+		int k = 0;
+		//img = ar
+		
+		//int ff = arg->img[0][0];
+		do
+		{
+			arg->Z = arg->Z * arg->Z + arg->C;
+			k++;
+		} while (cabs(arg->Z) < 2 && k < arg->max_iter);
+
+		if (k == arg->max_iter)
+		{
+			memcpy(arg->img[arg->i][j], "\0\0\0", 3);
+		}
+		else
+		{
+			int index = (k + arg->palette_shift)
+				    % (sizeof(colors) / sizeof(colors[0]));
+			memcpy(arg->img[arg->i][j], colors[index], 3);
+		}
+	}
+}
+
+
+void mandelbrot_draw(int x_resolution, int y_resolution, int max_iter,
+	                double view_x0, double view_x1, double view_y0, double view_y1,
+	                double x_stepsize, double y_stepsize,
+	                int palette_shift, unsigned char (*img)[x_resolution][3],
+						 int num_threads) {
+	double y;
+	double x;
+
+	//complex double Z;
+	//complex double C;
+
+	//int k;
+
+	int thread_num;
+	
+	//tot_loops = y_resolution * x_resolution;
+	
+	//loops_thread = int(tot_loops / num_threads);
+
+	pthread_t *threads = (pthread_t*) malloc (num_threads*sizeof(pthread_t));
+	struct pthread_args* args = (struct pthread_args*) malloc(num_threads*sizeof(struct pthread_args));	
+
+	for (int i = 0; i < y_resolution; i++)
+	{
+
+		
+		thread_num = i % num_threads;
+		args[thread_num].Z =  0 + 0 * I; 
+		args[thread_num].C = x + y * I;
+		args[thread_num].max_iter = max_iter;
+		//args[thread_num].x_resolution = x_resolution; 
+		args[thread_num].img = img[0][0];
+		args[thread_num].palette_shift = palette_shift;
+		args[thread_num].i = i;
+		//args[thread_num].j = j;
+		//args[thread_num].y = view_y1 - i * y_stepsize;
+		//args[thread_num].x = view_x0 + j * x_stepsize 	
+
+			//iZ = 0 + 0 * I;
+			//C = x + y * I;
+			
+		pthread_create(&threads[thread_num],NULL,kernel, args+thread_num);
+			
+	}
+	
+
+	for (int i = 0 ; i < num_threads; i++){
+		pthread_join(threads[i], NULL);
+	}
+
+	free(threads);
+	free(args);
+	//return 0;
+}
