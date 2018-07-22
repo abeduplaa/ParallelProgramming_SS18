@@ -1,26 +1,70 @@
 #include"dgemm.h"
 #include <immintrin.h>
-#include <smmintrin.h>
-#include <string.h>
 
-
-void dotmul_intrins(float *A, float *B, float C, int SIZE)
+void dotmul_intrins128(float *A, float *B, float *C, int SIZE)
 {
-
   register __m128 *a, *b;
-  a = (__m128*) &A;
-  b = (__m128*) &B;
 
-  ///*
+  register __m128 r1,r2,r2a,r3,r4; //,r4;
+  //register __m128 ;
+  register int k;
+  r4 = _mm_setzero_ps();
+    for (k = 0; k < SIZE; k += 4)
+    {
 
-  __m128 r1 = _mm_mul_ps(*a, *b);
-  __m128 r2 = _mm_hadd_ps(r1, r1);
-  __m128 r3 = _mm_hadd_ps(r2, r2);
-  _mm_store_ss(&C, r3);
+      r1 = _mm_setzero_ps();
+      r2 = _mm_setzero_ps();
+      r3 = _mm_setzero_ps();
 
-  //*/
 
-  //_mm_store_ss(C, _mm_hadd_ps(_mm_hadd_ps(_mm_mul_ps(*a, *b), _mm_mul_ps(*a, *b)), _mm_hadd_ps(_mm_mul_ps(*a, *b), _mm_mul_ps(*a, *b))));
+      a = (__m128*) &A[k];
+      b = (__m128*) &B[k];
+
+      r1 = _mm_mul_ps(*a, *b);
+      r2 = _mm_hadd_ps(r1, r1);
+      r3 = _mm_hadd_ps(r2, r2);
+
+      r4 = _mm_add_ps(r4,r3);
+
+    }
+    _mm_store_ss(C, r4);
+}
+
+void dotmul_intrins(float *A, float *B, float *C, int SIZE)
+{
+  register __m256 a, b;
+
+  register __m256 r1,r2, r2a, r3,r4, r6;
+  //__m256 r6;
+
+  //SIZE += 8;
+  register int k;
+  r6 = _mm256_setzero_ps();
+
+    for (k = 0; k < SIZE; k += 8)
+    {
+      //r1 = _mm256_setzero_ps();
+      //r2 = _mm256_setzero_ps();
+      //r2a = _mm256_setzero_ps();
+      r3 = _mm256_setzero_ps();
+      r4 = _mm256_setzero_ps();
+
+      a = _mm256_loadu_ps(&A[k]);
+      b = _mm256_loadu_ps(&B[k]);
+
+      r1 = _mm256_mul_ps(a,b); //multiply them together
+
+      r2 = _mm256_hadd_ps(r1, _mm256_permute2f128_ps(r1,r1,1)); //add to get (12) and (34) added together
+
+      r3 = _mm256_hadd_ps(r2, r2 ); //add to get (1234) and (5678)
+      //r4 = _mm256_hadd_ps(r3, r3); //add to get (12345678)
+      r4 = _mm256_hadd_ps(r3, r3); //add to get (12345678)
+
+      //__m256 rd = _mm256_set_p s(2.0,2.0,2.0,2.0,2.0,2.0,2.0,2.0);
+      //r4 = _mm256_div_ps(r4,rd);
+      *C += r4[0];
+    }
+    //_mm256_storeu_ps(C, r6);
 
 }
 
@@ -28,20 +72,12 @@ void dotmul_intrins(float *A, float *B, float C, int SIZE)
 
 void dgemm(float *a, float *b, float *c, int n)
 {
-  float *a1, *b1;
-  a1 = (float*)malloc(n);
-  b1 = (float*)malloc(n);
   for (int i = 0; i < n; ++i )
   {
-    //float *a1 = &a[i * n];
-    memcpy(a1, &a[i*n], n*sizeof(*a));
     for (int j = 0 ; j<n; ++j )
     {
-      //b1 = &b[j*n];
-      memcpy(b1, &b[i*n], n*sizeof(*b));
-
-      dotmul_intrins(a1,b1,c[i * n + j],n);
-
+      //dotmul_intrins128(&a[i*n],&b[j*n],&c[i * n + j], n);
+      dotmul_intrins(&a[i*n],&b[j*n],&c[i * n + j], n);
     }
   }
 }
